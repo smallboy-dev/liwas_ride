@@ -1,0 +1,72 @@
+Project Name: LiWAS Ride
+Stack: Next.js (Frontend), Firebase (Auth, Firestore, Storage, Cloud Functions, Messaging)
+Theme: Light & Dark mode
+Notifications: Real-time with Firebase Cloud Messaging + Toasts
+
+OVERVIEW
+LiWAS Ride connects vendors, drivers, and users in a food, parcel, and grocery delivery ecosystem.
+Users use the mobile app to place orders.
+Vendors and drivers use the web dashboard to manage operations.
+Admin monitors and controls the entire platform.
+
+USER TYPES
+1. User (Customer) – places orders.
+2. Vendor – manages store, products, menus, orders, payouts.
+3. Driver – manages deliveries and earnings.
+4. Admin – manages vendors, drivers, categories, orders, payouts.
+
+AUTHENTICATION
+Firebase Authentication handles login and registration for Vendors, Drivers, and Admin.
+Unapproved accounts cannot log in.
+
+REGISTRATION FORMS
+Vendor: Business Name, Vendor Type, Email, Phone, Documents, Personal Info, Password.
+Driver: Name, Email, Phone, Password, Driver Type, Documents.
+After submission: display “Your application is under review.”
+
+DASHBOARD STRUCTURE
+Vendor Dashboard:
+- Dashboard: cards (Total Orders, Earnings, Active Products)
+- Products Dropdown: Products, Menus, Option Groups, Options
+- Orders: table of vendor orders
+- Payments Dropdown: Accounts, Payouts
+- Earnings, Driver Payouts, Payment Methods
+
+Admin Dashboard:
+- Dashboard: total vendors, clients, earnings, orders
+- Vendor Management: Vendors, Types, Zones, Fees
+- Categories, Products (all vendors), Package Delivery, Taxi Booking
+- Orders (Refunds dropdown), Users, Payments, Earnings, Payouts, Subscriptions, Driver Tracking
+
+Driver Dashboard:
+- Dashboard: Active Deliveries, Earnings, History
+- Orders/Trips, Payouts, Account Info, Notifications
+
+DATA LINKING LOGIC
+- Each document (product, menu, order, payout) includes vendorId or driverId.
+- Vendor/Driver dashboards query data where ID matches logged-in user.
+- Firestore rules ensure isolation per user type.
+- Admin has full access.
+
+REALTIME NOTIFICATIONS
+- Use Firestore listeners and FCM.
+- Trigger toasts for new vendor/driver registration, order creation, payouts, approvals.
+
+THEME
+- Dual theme (Light/Dark)
+- Save user preference locally or in Firestore.
+
+SECURITY RULES (Simplified)
+- Vendors access data where vendorId == auth.uid
+- Drivers access data where driverId == auth.uid
+- Admins access all data
+
+TASKMASTER IMPLEMENTATION NOTES
+- Create collections: vendors, drivers, products, menus, orders, payouts, users.
+- Implement linking using vendorId and driverId fields.
+- Build separate dashboards per role.
+- Add role-based routes and security.
+- Enable FCM notifications for all dashboards.
+- Apply Firestore listeners for real-time data.
+- Add light/dark theme toggle and persist preference.
+

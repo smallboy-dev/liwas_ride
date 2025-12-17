@@ -1,0 +1,152 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function authRole() {
+      return request.auth != null ? request.auth.token.role : null;
+    }
+
+    function isVendorUser() {
+      return authRole() == 'vendor';
+    }
+
+    function isDriverUser() {
+      return authRole() == 'driver';
+    }
+    
+    // Note: Admin check removed to avoid Firestore dependency
+    // Admin access can be granted via IAM roles in Firebase Console if needed
+    // For now, document access is controlled by userId matching
+    
+    // Documents folder - for vendor and driver document uploads
+    match /documents/{role}/{userId}/{documentType}/{fileName} {
+      
+      // Users can upload documents to their own folder
+      // Allow create if:
+      // 1. User is authenticated
+      // 2. userId in path matches authenticated user's UID
+      // 3. role is either 'vendor' or 'driver'
+      // 4. File size is reasonable (max 10MB)
+      allow create: if isAuthenticated() &&
+                       userId == request.auth.uid &&
+                       (role == 'vendor' || role == 'driver') &&
+                       request.resource.size < 10 * 1024 * 1024;
+      
+      // Users can read their own documents
+      allow read: if isAuthenticated() && userId == request.auth.uid;
+      
+      // Users can delete their own documents
+      allow delete: if isAuthenticated() && userId == request.auth.uid;
+      
+      // Users can update their own documents (re-upload)
+      allow update: if isAuthenticated() && userId == request.auth.uid &&
+                       request.resource.size < 10 * 1024 * 1024;
+    }
+    
+    // Products folder - for product images
+    match /products/{vendorId}/{productId}/{fileName} {
+      // Allow read for authenticated users (images are public)
+      // allow read: if isAuthenticated();
+      allow read: if true;
+      
+      // Allow write for vendors (their own products only)
+      // Note: File size limit of 5MB for images
+      allow write: if isAuthenticated() && 
+                       vendorId == request.auth.uid &&
+                       request.resource.size < 5 * 1024 * 1024;
+    }
+    
+    // Proof-of-delivery signatures: drivers/{driverId}/orders/{orderId}/signature.png
+    match /drivers/{driverId}/orders/{orderId}/{fileName} {
+      allow create, update: if isAuthenticated() &&
+        request.auth.uid == driverId &&
+        request.resource.size < 5 * 1024 * 1024;
+
+      allow delete: if isAuthenticated() && request.auth.uid == driverId;
+
+      allow read: if isAuthenticated() && request.auth.uid == driverId;
+    }
+
+    // Remittance signatures captured by drivers when handing cash to vendors
+    match /drivers/{driverId}/remittances/{transactionId}/{fileName} {
+      function isVendorSignature() {
+        return fileName.matches('vendor-signature-.*');
+      }
+
+      allow create, update: if isAuthenticated() &&
+        request.resource.size < 5 * 1024 * 1024 &&
+        (
+          (request.auth.uid == driverId && !isVendorSignature()) ||
+          (isVendorUser() && isVendorSignature())
+        );
+
+      allow delete: if isAuthenticated() && (
+        (request.auth.uid == driverId && !isVendorSignature()) ||
+        (isVendorUser() && isVendorSignature())
+      );
+
+      allow read: if isAuthenticated() && (
+        request.auth.uid == driverId ||
+        isVendorUser()
+      );
+    }
+    
+    // VendorTypes folder - for vendor type images
+    match /vendorTypes/{vendorTypeId}/{fileName} {
+      // Allow read for all authenticated users (images are public)
+      allow read: if isAuthenticated();
+      
+      // Allow write for authenticated users (admin access can be restricted via IAM)
+      // Note: File size limit of 5MB for images
+      allow write: if isAuthenticated() && 
+                       request.resource.size < 5 * 1024 * 1024;
+    }
+    
+    // Categories folder - for category images
+    match /categories/{categoryId}/{fileName} {
+      // Allow read for all authenticated users (images are public)
+      allow read: if isAuthenticated();
+      
+      // Allow write for authenticated users (admin access can be restricted via IAM)
+      // Note: File size limit of 5MB for images
+      allow write: if isAuthenticated() && 
+                       request.resource.size < 5 * 1024 * 1024;
+    }
+    
+    // Subcategories folder - for subcategory images
+    match /subcategories/{subcategoryId}/{fileName} {
+      // Allow read for all authenticated users (images are public)
+      allow read: if isAuthenticated();
+      
+      // Allow write for authenticated users (admin access can be restricted via IAM)
+      // Note: File size limit of 5MB for images
+      allow write: if isAuthenticated() && 
+                       request.resource.size < 5 * 1024 * 1024;
+    }
+    
+    // Options folder - for option images
+    match /options/{vendorId}/{optionId}/{fileName} {
+      // Allow read for authenticated users (images are public)
+      allow read: if isAuthenticated();
+      
+      // Allow write for vendors (their own options only)
+      // Note: File size limit of 5MB for images
+      allow write: if isAuthenticated() && 
+                       vendorId == request.auth.uid &&
+                       request.resource.size < 5 * 1024 * 1024;
+    }
+    
+    // Catch-all: Deny access to all other paths by default
+    match /{allPaths=**} {
+      // Deny by default - no access to unspecified paths
+      allow read, write: if false;
+    }
+  }
+}
+
