@@ -1,0 +1,99 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #ffffff;
+  --foreground: #0f172a;
+  --brand-primary: #f97316;
+  --brand-secondary: #ff8c42;
+}
+
+.dark {
+  --background: #000000;
+  --foreground: #ffffff;
+  --brand-primary: #ff8c42;
+  --brand-secondary: #ffaa66;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  
+  .gradient-brand {
+    background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-secondary) 100%);
+  }
+  
+  .gradient-brand-soft {
+    background: linear-gradient(135deg, rgba(249, 115, 22, 0.1) 0%, rgba(255, 140, 66, 0.1) 100%);
+  }
+  
+  .bg-orange-light {
+    background: linear-gradient(135deg, rgba(249, 115, 22, 0.05) 0%, rgba(255, 140, 66, 0.05) 100%);
+  }
+}
+
+/* Smooth scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #fb923c;
+  border-radius: 4px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #ff8c42;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #f97316;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #ffaa66;
+}
+
+/* Input focus animations */
+input:focus,
+textarea:focus,
+select:focus {
+  transition: all 0.2s ease;
+}
+
+/* Button hover effects */
+button {
+  transition: all 0.2s ease;
+}
+
+button:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+
+button:not(:disabled):active {
+  transform: translateY(0);
+}
+
+/* Card hover effects */
+.card-hover {
+  transition: all 0.3s ease;
+}
+
+.card-hover:hover {
+  transform: translateY(-2px);
+}

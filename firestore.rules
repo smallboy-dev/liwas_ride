@@ -1,0 +1,460 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // -------------------------
+    //  COMMON HELPERS
+    // -------------------------
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // -------------------------
+    //  BANNERS (PUBLIC READ)
+    // -------------------------
+    match /banners/{bannerId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /driverTransactions/{transactionId} {
+      // Allow drivers to read their own transactions
+      // Allow vendors to read transactions for their orders
+      // Allow admins full access
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.driverId == request.auth.uid ||
+        (resource.data.keys().hasAny(['vendorId']) && resource.data.vendorId == request.auth.uid)
+      );
+      allow create: if isAuthenticated() &&
+        request.auth.uid == request.resource.data.driverId &&
+        isApprovedDriver(request.auth.uid);
+      allow update: if isAuthenticated() &&
+        ((request.auth.uid == resource.data.driverId &&
+          request.resource.data.driverId == resource.data.driverId) ||
+         (request.auth.uid == resource.data.vendorId &&
+          request.resource.data.vendorId == resource.data.vendorId)) &&
+        request.resource.data.driverId == resource.data.driverId &&
+        request.resource.data.vendorId == resource.data.vendorId &&
+        request.resource.data.orderId == resource.data.orderId &&
+        request.resource.data.type == resource.data.type &&
+        request.resource.data.paymentMethod == resource.data.paymentMethod &&
+        request.resource.data.grossAmount == resource.data.grossAmount &&
+        request.resource.data.commissionAmount == resource.data.commissionAmount &&
+        request.resource.data.netAmount == resource.data.netAmount &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        (!resource.data.keys().hasAny(['orderCode']) || request.resource.data.orderCode == resource.data.orderCode) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status',
+          'updatedAt',
+          'remittedAt',
+          'remittanceSignatureUrl',
+          'remittanceSignaturePath',
+          'remittedBy',
+          'vendorTransactionId',
+          'vendorConfirmedAt',
+          'vendorConfirmedBy',
+          'vendorConfirmationSignatureUrl',
+          'vendorConfirmationSignaturePath',
+        ]);
+      allow delete: if false;
+    }
+
+    match /vendorTransactions/{transactionId} {
+      allow read: if isAuthenticated() && request.auth.uid == resource.data.vendorId;
+      allow create: if isAuthenticated() &&
+        request.auth.uid == request.resource.data.driverId &&
+        isApprovedDriver(request.auth.uid);
+      allow update: if isAuthenticated() &&
+        ((request.auth.uid == resource.data.driverId && request.resource.data.driverId == resource.data.driverId) ||
+         (request.auth.uid == resource.data.vendorId && request.resource.data.vendorId == resource.data.vendorId)) &&
+        request.resource.data.orderId == resource.data.orderId &&
+        request.resource.data.type == resource.data.type &&
+        request.resource.data.paymentMethod == resource.data.paymentMethod &&
+        request.resource.data.grossAmount == resource.data.grossAmount &&
+        request.resource.data.commissionAmount == resource.data.commissionAmount &&
+        request.resource.data.netAmount == resource.data.netAmount &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        (!resource.data.keys().hasAny(['orderCode']) || request.resource.data.orderCode == resource.data.orderCode) &&
+        (!resource.data.keys().hasAny(['driverName']) || request.resource.data.driverName == resource.data.driverName) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status',
+          'updatedAt',
+          'remittedAt',
+          'remittanceSignatureUrl',
+          'remittanceSignaturePath',
+          'remittedBy',
+          'driverTransactionId',
+          'vendorConfirmedAt',
+          'vendorConfirmedBy',
+          'vendorConfirmationSignatureUrl',
+          'vendorConfirmationSignaturePath',
+        ]);
+      allow delete: if false;
+    }
+
+    function userRef(uid) {
+      return /databases/$(database)/documents/users/$(uid);
+    }
+
+    function userExists(uid) {
+      return exists(userRef(uid));
+    }
+
+    function getUser(uid) {
+      return get(userRef(uid)).data;
+    }
+
+    function getUserRole() {
+      return getUser(request.auth.uid).role;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+             userExists(request.auth.uid) &&
+             getUser(request.auth.uid).role == 'admin';
+    }
+
+    function isApproved() {
+      return isAuthenticated() &&
+             userExists(request.auth.uid) &&
+             getUser(request.auth.uid).isApproved == true;
+    }
+
+    function isVendor() {
+      return isAuthenticated() &&
+             userExists(request.auth.uid) &&
+             getUser(request.auth.uid).role == 'vendor';
+    }
+
+    function isApprovedVendor() {
+      return isVendor() &&
+             isApproved();
+    }
+
+    function isApprovedDriver(driverId) {
+      return userExists(driverId) &&
+             getUser(driverId).role == 'driver' &&
+             getUser(driverId).isApproved == true;
+    }
+
+    // -------------------------
+    //  USERS COLLECTION
+    // -------------------------
+    match /users/{userId} {
+
+      allow read: if isAuthenticated() && (
+        request.auth.uid == userId ||
+        (isApprovedVendor() && resource.data.role == 'customer') ||
+        (isApprovedVendor() && resource.data.role == 'driver' && resource.data.isApproved == true)
+      );
+
+      allow create: if isAuthenticated() &&
+                       request.auth.uid == userId &&
+                       request.resource.data.keys().hasAll(['email', 'uid', 'role', 'isApproved']) &&
+                       request.resource.data.uid == userId &&
+                       (
+                         (request.resource.data.role == 'user' && request.resource.data.isApproved == true) ||
+                         (request.resource.data.role in ['vendor', 'driver'] && request.resource.data.isApproved == false)
+                       );
+
+      allow update: if isAuthenticated() &&
+                       request.auth.uid == userId;
+
+      allow read, write: if isAdmin();
+    }
+
+    // -------------------------
+    //  VENDORS COLLECTION  (RESTAURANTS)
+    // -------------------------
+    match /vendors/{vendorId} {
+
+      // ALLOW CUSTOMERS TO VIEW RESTAURANTS
+      allow read: if isAuthenticated();
+
+      // Vendor creation – optional fields allowed
+      allow create: if isAuthenticated() &&
+                       vendorId == request.auth.uid &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.keys().hasAll([
+                         'userId', 'businessName', 'vendorType', 'phone', 'personalInfo'
+                       ]) &&
+                       (
+                         !userExists(request.auth.uid) ||
+                         (userExists(request.auth.uid) && getUser(request.auth.uid).isApproved == false)
+                       );
+
+      // Vendor self updates
+      allow update: if isAuthenticated() &&
+                       resource.data.userId == request.auth.uid;
+
+      // Admin overrides
+      allow read, write: if isAdmin();
+    }
+
+    // -------------------------
+    //  DRIVERS COLLECTION
+    // -------------------------
+    match /drivers/{driverId} {
+
+      // Allow drivers to read their own driver document regardless of approval,
+      // plus admins and approved vendors (for regular drivers).
+      allow read: if isAuthenticated() && (
+        request.auth.uid == driverId ||
+        resource.data.userId == request.auth.uid ||
+        isAdmin() ||
+        (
+          isApprovedVendor() &&
+          isApprovedDriver(driverId) &&
+          (!('driverType' in resource.data) ||
+            resource.data.driverType in ['regular', 'Regular', 'REGULAR'])
+        )
+      );
+
+      allow create: if isAuthenticated() &&
+                       driverId == request.auth.uid &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.keys().hasAll([
+                         'userId', 'name', 'driverType', 'phone'
+                       ]) &&
+                       (
+                         !userExists(request.auth.uid) ||
+                         (userExists(request.auth.uid) && getUser(request.auth.uid).isApproved == false)
+                       );
+
+      allow update: if isAuthenticated() &&
+                       resource.data.userId == request.auth.uid;
+
+      allow read, write: if isAdmin();
+    }
+
+    // -------------------------
+    //  PRODUCTS (CUSTOMERS CAN READ)
+    // -------------------------
+    match /products/{productId} {
+
+      allow read: if isAuthenticated(); // customers, vendor, drivers, admin
+
+      allow write: if isAuthenticated() &&
+        ( isAdmin() ||
+          (isApproved() &&
+           getUserRole() == 'vendor' &&
+           request.resource.data.vendorId == request.auth.uid)
+        );
+    }
+
+    // -------------------------
+    //  ORDERS
+    // -------------------------
+    match /orders/{orderId} {
+
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.vendorId == request.auth.uid ||
+        resource.data.driverId == request.auth.uid ||
+        resource.data.userId == request.auth.uid ||
+        // Allow drivers to read available (ready) orders to accept them
+        (userExists(request.auth.uid) && getUser(request.auth.uid).role == 'driver' && resource.data.orderStatus == 'ready')
+      );
+
+      allow create: if isAuthenticated() && (
+        isAdmin() ||
+        (isApproved() && getUserRole() == 'vendor' &&
+         request.resource.data.vendorId == request.auth.uid)
+      );
+
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        (isApproved() && getUserRole() == 'vendor' &&
+         resource.data.vendorId == request.auth.uid &&
+         request.resource.data.vendorId == request.auth.uid) ||
+        (
+          isApproved() &&
+          getUserRole() == 'driver' &&
+          resource.data.orderStatus == 'ready' &&
+          request.resource.data.orderStatus == 'assigned' &&
+          request.resource.data.driverId == request.auth.uid &&
+          request.resource.data.vendorId == resource.data.vendorId &&
+          (!resource.data.keys().hasAny(['driverId']) || resource.data.driverId == null || resource.data.driverId == '')
+        )
+        || (
+          isApproved() &&
+          getUserRole() == 'driver' &&
+          resource.data.driverId == request.auth.uid &&
+          resource.data.orderStatus == 'assigned' &&
+          request.resource.data.orderStatus == 'enroute' &&
+          request.resource.data.driverStatus == 'enroute' &&
+          request.resource.data.driverId == request.auth.uid &&
+          request.resource.data.vendorId == resource.data.vendorId
+        )
+        || (
+          isApproved() &&
+          getUserRole() == 'driver' &&
+          resource.data.driverId == request.auth.uid &&
+          resource.data.orderStatus in ['assigned', 'enroute', 'in-transit'] &&
+          request.resource.data.orderStatus == 'delivered' &&
+          request.resource.data.driverStatus == 'delivered' &&
+          request.resource.data.driverId == request.auth.uid &&
+          request.resource.data.vendorId == resource.data.vendorId
+        )
+      );
+
+      allow delete: if isAuthenticated() && (
+        isAdmin() ||
+        (isApproved() && getUserRole() == 'vendor' &&
+         resource.data.vendorId == request.auth.uid)
+      );
+    }
+
+    // -------------------------
+    //  PAYOUTS
+    // -------------------------
+    match /payouts/{payoutId} {
+
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.vendorId == request.auth.uid ||
+        resource.data.driverId == request.auth.uid
+      );
+
+      allow write: if isAdmin();
+    }
+
+    // -------------------------
+    // CATEGORIES (CUSTOMERS CAN READ)
+    // -------------------------
+    match /categories/{categoryId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // -------------------------
+    // SUBCATEGORIES (CUSTOMERS CAN READ)
+    // -------------------------
+    match /subcategories/{subcategoryId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // -------------------------
+    // OPTION GROUPS (CUSTOMERS CAN READ)
+    // -------------------------
+    match /optionGroups/{optionGroupId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (
+        isAdmin() ||
+        (isApproved() && getUserRole() == 'vendor' &&
+         request.resource.data.vendorId == request.auth.uid)
+      );
+    }
+
+    // -------------------------
+    // OPTIONS (CUSTOMERS CAN READ)
+    // -------------------------
+    match /options/{optionId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (
+        isAdmin() ||
+        (isApproved() && getUserRole() == 'vendor' &&
+         request.resource.data.vendorId == request.auth.uid)
+      );
+    }
+
+    // -------------------------
+    // VENDOR TYPES (PUBLIC READ RESTAURANT TYPES)
+    // -------------------------
+    match /vendorTypes/{vendorTypeId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // -------------------------
+    // DEVICES (FCM TOKENS)
+    // -------------------------
+    match /devices/{deviceId} {
+      // Users can read their own devices
+      allow read: if isAuthenticated() &&
+                     resource.data.userId == request.auth.uid;
+
+      // Users can create their own devices
+      allow create: if isAuthenticated() &&
+                       request.resource.data.userId == request.auth.uid;
+
+      // Users can update their own devices
+      allow update: if isAuthenticated() &&
+                       resource.data.userId == request.auth.uid;
+
+      // Users can delete their own devices
+      allow delete: if isAuthenticated() &&
+                       resource.data.userId == request.auth.uid;
+
+      // Admins have full access
+      allow read, write: if isAdmin();
+    }
+
+    // -------------------------
+    // NOTIFICATION LOGS
+    // -------------------------
+    match /notificationLogs/{logId} {
+      // Users can read their own logs
+      allow read: if isAuthenticated() &&
+                     resource.data.userId == request.auth.uid;
+
+      // Only backend/admin can write
+      allow write: if isAdmin();
+    }
+
+    // -------------------------
+    // NOTIFICATION TEMPLATES
+    // -------------------------
+    match /notificationTemplates/{templateId} {
+      // All authenticated users can read templates
+      allow read: if isAuthenticated();
+
+      // Only admins can write
+      allow write: if isAdmin();
+    }
+
+    // -------------------------
+    // USER NOTIFICATION PREFERENCES
+    // -------------------------
+    match /userNotificationPreferences/{userId} {
+      // Users can read and write their own preferences
+      allow read, write: if isAuthenticated() &&
+                           request.auth.uid == userId;
+
+      // Admins have full access
+      allow read, write: if isAdmin();
+    }
+
+    // -------------------------
+    // NOTIFICATION QUEUES
+    // -------------------------
+    match /notificationQueues/{queueId} {
+      // Only backend/admin can access
+      allow read, write: if isAdmin();
+    }
+
+    // -------------------------
+    // WALLETS (OWNER READ, FUNCTIONS WRITE)
+    // -------------------------
+    match /wallets/{walletId} {
+      // Users can read their own wallet
+      allow read: if isAuthenticated() && request.auth.uid == walletId;
+
+      // Users cannot write directly; wallet writes are done by backend functions
+      allow write: if false;
+
+      // Admin override
+      allow read, write: if isAdmin();
+    }
+
+    // -------------------------
+    // ADMIN GLOBAL ACCESS
+    // -------------------------
+    match /{document=**} {
+      allow read, write: if isAdmin();
+    }
+
+  }
+}

@@ -1,0 +1,13 @@
+[
+  {
+    "origin": [
+      "http://localhost:54824",
+      "http://localhost:3000",
+      "https://liwas-793a1.web.app",
+      "https://liwas-793a1.firebaseapp.com"
+    ],
+    "method": ["GET", "HEAD", "OPTIONS"],
+    "responseHeader": ["Content-Type", "Authorization"],
+    "maxAgeSeconds": 3600
+  }
+]
