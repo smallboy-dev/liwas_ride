@@ -6,16 +6,6 @@
 const fs = require('fs');
 const path = require('path');
 
-// Get environment variables
-const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyAQaGVCKQ6W7rOm0UlrFjV4pRCcgNJoQzU",
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "liwas-793a1.firebaseapp.com",
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "liwas-793a1",
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "liwas-793a1.firebasestorage.app",
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "578255787212",
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:578255787212:web:d30235aa9107c13cbf9e69",
-};
-
 // Generate service worker content
 const swContent = `// Firebase Messaging Service Worker
 // Handles background notifications when the app is closed
